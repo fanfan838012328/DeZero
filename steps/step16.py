@@ -7,7 +7,7 @@ def as_array(x):
     return x
 
 
-# 重复使用同一个变量
+# 反向传播,对复杂的计算图能按照正确的顺序计算
 class Variable:
     def __init__(self, data):
         if data is not None:
@@ -17,7 +17,7 @@ class Variable:
         self.data = data
         self.grad = None
         self.creator = None  # 创造者
-        self.generation = 0  # 辈份
+        self.generation = 0  # 辈分
 
     def set_creator(self, func):
         self.creator = func
@@ -30,7 +30,16 @@ class Variable:
         if self.grad is None:
             self.grad = np.ones_like(self.data)  # 简化y.grad=np.array(1.0)
 
-        funcs = [self.creator]
+        funcs = []
+        seen_set = set()
+
+        def add_func(f):
+            if f not in seen_set:  # 使用set确保函数没有重复
+                funcs.append(f)
+                seen_set.add(f)
+                funcs.sort(key=lambda x: x.generation)  # 按照辈分从小到大排序
+
+        add_func(self.creator)
         while funcs:
             fun = funcs.pop()  # 获取函数
             gys = [output.grad for output in fun.outputs]  # 获得输出变量的梯度
@@ -45,7 +54,7 @@ class Variable:
                     x.grad = x.grad + gx
 
                 if x.creator is not None:  # 如果前面还有函数,则加入到funcs中
-                    funcs.append(x.creator)
+                    add_func(x.creator)
 
 
 # 修改Function类使其能接受多个变量的输入和输出
@@ -58,6 +67,8 @@ class Function:
         if not isinstance(ys, tuple):  # 使得forward函数可以直接输出一个数，不用写成元组
             ys = (ys,)
         outputs = [Variable(as_array(y)) for y in ys]
+
+        self.generation = max([x.generation for x in inputs])  # 函数的辈份是输入变量的最大辈分
 
         for output in outputs:  # 让输出变量保存创造者信息
             output.set_creator(self)
@@ -105,18 +116,11 @@ def square(x):
     return f(x)
 
 
-x2 = Variable(np.array(5.0))
-y2 = add(x2, add(x2, x2))
-y2.backward()
-print(x2.grad)  # 导数变成2.0
+x = Variable(np.array(2.0))
 
-# 重复使用
-y3 = add(x2, x2)
-y3.backward()
-print(x2.grad)  # 导数应为2.0,但变为5.0
+a = square(x)
 
-# 重复使用
-x2.clear_grad()
-y4 = add(x2, x2)
-y4.backward()
-print(x2.grad)  # 导数为2.0
+y = add(square(a), square(a))
+y.backward()
+print(y.data)
+print(x.grad)
