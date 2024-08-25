@@ -17,7 +17,7 @@ class Variable:
         self.data = data
         self.grad = None
         self.creator = None  # 创造者
-        self.generation = 0  # 辈分
+        self.generation = 0  # 辈份
 
     def set_creator(self, func):
         self.creator = func
